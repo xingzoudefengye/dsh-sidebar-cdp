@@ -36,6 +36,10 @@
 7. **注入库的那句 `executeJavaScript` 必须让返回值可克隆。** 库本体（`api`）带函数和 `Map`，直接 `(${fn})()` 会抛 `GUEST_VIEW_MANAGER_CALL: An object could not be cloned`——注意副作用已经发生（`globalThis` 已赋值），所以只有**第一次**调用报错、之后全好，极容易被误判成"偶发"。包一层 `Boolean(...)` 就行。
 8. **桥的 `call()` 拿到的是 `{ value, page }`，不是页面里的返回值本身。** `client-page.js` 里每个走 `eval` 的实现都要取 `answer.value`；漏了的话工具返回 `undefined` 字段，宿主会报 `value is not lossless JSON`（不是"没读到"）。
 9. **DOM 节点会被静默序列化成 `{}`，不抛错。** `executeJavaScript` 对函数、`Map` 这类会抛 `could not be cloned`（`evalInPage` 里按这个关键字兜底成 JSON 字符串），但对 Element 直接回 `{}`——所以 `sidebar_eval('document.body')` 拿到的是 `{}`，要节点信息就在页面里先取属性（`document.body.className`、`.children.length`）。
+10. **新版页面会把老输入框留成 0×0 的壳。** 百度首页的 `#kw`/`#su` 还在 DOM 里但尺寸为 0，真正的输入是 `#chat-textarea`。`locate()` 因此改成返回 `{ el }` / `{ error }`：选择器命中但全都不可见时**必须报错**，不能照写——否则 `sidebar_type` 会"成功"地把值写进看不见的元素（实测踩过）。
+11. **同一个链接常有多份（吸顶导航 + 页尾导航）。** 只按"可见"筛不够，还要 `inViewport()` 优先，否则会挑中屏幕外那份，落点检查再报"不在视口内"，看起来像工具坏了。
+12. **桌面版页面塞进窄侧栏会被裁掉，而且横滚不动。** 实测百度首页布局 1260 CSS 宽、视口只有 575（`html` 的 `overflow-x` 被站点设成 hidden，`scrollTo`/`scrollIntoView` 都无效）。`probe()` 先 `inline: 'nearest'`，不在视口再 `inline: 'center'`，仍够不着就如实拒绝。真要点右侧元素就让页面自己缩小：`sidebar_eval` 跑 `document.body.style.zoom = '0.45'`（用完记得置空）。
+13. **改页面库的代码要同时抬 `LIB_VERSION`（`state.v` / `api.v` / 常量三处）。** 已打开的页面靠这个字符串判断"要不要重新注入"，只改函数体不抬版本，老页面会一直跑旧逻辑（本地热更看起来"没生效"就是这样）。
 
 ## 改完怎么验
 

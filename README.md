@@ -79,11 +79,14 @@ node dsh-sidebar-cdp/scripts/install-desktop.mjs
 
 所有工具都接受 `target`（URL / 标题子串或 id，缺省取最后打开的那页）。
 
-**三个边界，先说清楚**：
+**四个边界，先说清楚**：
 
 - `sidebar_screenshot` 拍到的是**视口**，不是整页（`capturePage()` 没有 `captureBeyondViewport`；`fullPage` 参数目前无效）。
 - `sidebar_snapshot` 是**DOM 结构树**，不是浏览器的无障碍树。角色由标签与 `role` 属性推出来，够用来找控件，但不如真 AX 树准。
 - `sidebar_eval` 的返回值不可结构化克隆时会被处理：函数/`Map` 类会退化成 JSON 文本，**DOM 节点则直接变成 `{}`**（Electron 的静默行为，不报错）——要节点信息就在页面里先取属性，例如 `document.body.className`。
+- **窄侧栏会把桌面布局裁掉。** 侧栏页面宽约 575 CSS 像素（截图 863 px = 575×dpr1.5），而百度这类首页按 1260 宽布局、还把 `overflow-x` 设成 hidden，于是右侧元素既看不见也横滚不到，`sidebar_click` 会如实拒绝而不是乱点。要够到它就把页面缩小：`sidebar_eval` 跑 `document.body.style.zoom = '0.45'`，用完再置空。
+
+工具在动手前会挡掉三种"看起来成功"的情况：元素尺寸为 0（新版页面常把老 input 留成 0×0 的壳）、落点被别的元素接住、元素在视口外滚也滚不过去。命中多处时优先挑**屏幕内**那一个（吸顶导航和页尾导航常是同一个链接的两份）。
 
 ## 可选旁路：CDP
 

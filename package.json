@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidebar-cdp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Read and drive the native browser page in the DSH desktop Sidebar: nine tools, no launch flags, nothing to configure.",
   "license": "MIT",
   "keywords": [
