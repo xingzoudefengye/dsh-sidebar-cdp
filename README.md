@@ -25,6 +25,18 @@ sidebar_* 九个工具        ──路由──►  client.js
 
 宿主和客户端之间只隔着插件自己的两条 HTTP 路由；客户端长轮询取任务，执行完回写结果。没有第二个进程，没有端口，没有对应用的任何修改。
 
+## 兼容性
+
+| 平台 | 支持 | 说明 |
+| --- | --- | --- |
+| Windows 10/11 | ✅ 已实测（Windows 11，DSH 0.2.1-rc.2 桌面版） | `install-desktop.mjs` 与 `smoke.mjs` 都是 Node 脚本，PowerShell 里直接 `node` 跑 |
+| macOS | ⚠️ 设计支持，未实测 | 桌面版 profile 路径同样是 `~/.dsh/profiles/desktop`；`<webview>` 的 `executeJavaScript` / `sendInputEvent` / `capturePage` 是 Electron 跨平台 API |
+| Linux | ❌ | 官方桌面版不发 Linux |
+
+- **Node**：`engines` 要求 `>=22`。
+- **DSH**：`peerDependencies` 全是 `*`，不锁版本；需要能装第三方 bundle 的 0.2.x（本文按 0.2.1-rc.2 验证）。
+- **只对桌面版有效**：它驱动的是应用自己的 `<webview>`，web 端（浏览器里开 `127.0.0.1:…`）的侧栏没有这种元素。
+
 ## 安装
 
 装官方桌面版，启动一次（它会创建 profile），然后：
@@ -38,6 +50,18 @@ node dsh-sidebar-cdp/scripts/install-desktop.mjs
 脚本做两件事：往 `~/.dsh/profiles/desktop/package.json` 写依赖与 `dsh.profile.bundles`（桌面版 profile 由应用独占管理，`dsh plugin add` 会拒绝写入），然后在那个目录跑 `pnpm install`。改配置前备份到 `%TEMP%\dsh-desktop-profile-<时间戳>\`。
 
 参数：`--dry-run` 只看会改什么，`--no-install` 只改配置，`--spec=link:<路径>` 装本机源码。
+
+## 验证
+
+按顺序四步，每步都有可核对的输出：
+
+1. **host 半边**：`node scripts/smoke.mjs` → `工具数：9 → sidebar_targets, …` + `注册通过`。
+2. **重启桌面版**（完全退出，不是最小化），侧栏「+ → 浏览器」打开任意页面。
+3. **列页面**：让 agent 调 `sidebar_targets` → 应该看到 `w<id> 标题 — 地址` 一行。
+4. **真链路**：`sidebar_read` 能出正文 → `sidebar_click` 点一个链接并看标题变化 →
+   `sidebar_screenshot` 返回 PNG 路径（用普通文件工具读回来确认不是白图）。
+
+排错见下节。
 
 ## 工具
 
@@ -55,10 +79,11 @@ node dsh-sidebar-cdp/scripts/install-desktop.mjs
 
 所有工具都接受 `target`（URL / 标题子串或 id，缺省取最后打开的那页）。
 
-**两个边界，先说清楚**：
+**三个边界，先说清楚**：
 
 - `sidebar_screenshot` 拍到的是**视口**，不是整页（`capturePage()` 没有 `captureBeyondViewport`；`fullPage` 参数目前无效）。
 - `sidebar_snapshot` 是**DOM 结构树**，不是浏览器的无障碍树。角色由标签与 `role` 属性推出来，够用来找控件，但不如真 AX 树准。
+- `sidebar_eval` 的返回值不可结构化克隆时会被处理：函数/`Map` 类会退化成 JSON 文本，**DOM 节点则直接变成 `{}`**（Electron 的静默行为，不报错）——要节点信息就在页面里先取属性，例如 `document.body.className`。
 
 ## 可选旁路：CDP
 
@@ -75,6 +100,22 @@ node dsh-sidebar-cdp/scripts/install-desktop.mjs
 | `侧栏里没有打开的网页` | 侧栏浏览器没开页面；打开一个地址即可 |
 | `侧栏插件没有客户端半边在跑` | 装着插件之后没重启过桌面版；新客户端模块在启动时加载 |
 | 装了插件但工具列表里没有 `sidebar_*` | 检查 profile `package.json` 的 `dsh.profile.bundles` 里有 `dsh-sidebar-cdp`，以及 `node_modules/dsh-sidebar-cdp` 是软的还是真目录 |
+| 工具返回 `value is not lossless JSON` | 0.1.0 的 bug（桥返回 `{value,page}` 没取 `.value`），升到 0.1.1 并重启 |
+| 第一次操作抛 `An object could not be cloned` | 0.1.0 的 bug（注入页面库时把带函数的对象当返回值），升到 0.1.1 并重启 |
+| 改了代码但行为没变 | 客户端半边（`lib/client.js`）热更；host 半边（`index/tools/bridge/client-page`）必须重启桌面版 |
+
+## 卸载
+
+从 `~/.dsh/profiles/desktop/package.json` 里删掉 `dependencies` 与 `dsh.profile.bundles` 中的
+`dsh-sidebar-cdp`，在该目录 `pnpm install`，然后完全退出并重启桌面版。
+截图落在系统临时目录（`%TEMP%\sidebar-cdp\shots\`），可以直接删。
+
+## 相关插件
+
+| 插件 | 关系 |
+|---|---|
+| [`dsh-browser`](https://github.com/xingzoudefengye/dsh-browser) | 旧方案：每会话起独立 Chrome 再镜像到侧栏。和官方侧栏不共享页面，2026-10 起被本插件取代 |
+| [`dsh-env`](https://github.com/xingzoudefengye/dsh-env)（私有） | 另一台机器的复原清单里会通过 `git clone` + `install-desktop.mjs` 装本插件 |
 
 ## 目录
 
@@ -90,6 +131,7 @@ lib/page.js         CDP 下的页面操作（旁路）
 lib/schema.js       作者写法 → JSON Schema + 参数校验（不依赖 dsh-tools）
 scripts/install-desktop.mjs  装进桌面版 profile
 scripts/smoke.mjs            假 ctx 冒烟
+scripts/patch-shortcuts.ps1  维护：把快捷方式上的 --remote-debugging-port 去掉（曾经加过才有用）
 ```
 
 维护须知见 [AGENTS.md](AGENTS.md)。
