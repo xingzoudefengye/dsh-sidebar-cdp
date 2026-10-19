@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>Sidebar CDP 测试页</title></head>
+<body>
+  <h1>测试页面</h1>
+  <p>这是一个用于验证 CDP 点击与输入的页面。</p>
+  <p><a href="https://example.com/">示例链接</a></p>
+  <input id="name" placeholder="输入名字" />
+  <button id="go" onclick="document.getElementById('out').textContent = '你好, ' + document.getElementById('name').value">打招呼</button>
+  <p id="out">（还没点）</p>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# dsh-sidebar-cdp bundle patch: inserts one row; its apply() registers the nine
+# sidebar_* tools and the plugin's own HTTP routes. There is no base row to
+# replace, because the capability (reading and clicking the Sidebar's native
+# page) does not exist in the harness.
+#
+# transport: client (default) drives the page through the plugin's client half
+# inside the desktop shell — no launch flags, nothing to configure.
+# transport: cdp is an optional bypass for apps started with
+# --remote-debugging-port; only then does `port` matter.
+- insert:
+    - id: dsh-sidebar-cdp
+      name: 'dsh-sidebar-cdp'
+      config:
+        transport: client
