@@ -35,7 +35,7 @@
 6. **别在 `<webview>` 上用 `element.click()` 冒充点击。** 那是合成事件（`isTrusted === false`），有些站点不认；`sendInputEvent` 才是真实鼠标，坐标是 webview 内部 CSS 像素，与 `getBoundingClientRect` 同一套。
 7. **注入库的那句 `executeJavaScript` 必须让返回值可克隆。** 库本体（`api`）带函数和 `Map`，直接 `(${fn})()` 会抛 `GUEST_VIEW_MANAGER_CALL: An object could not be cloned`——注意副作用已经发生（`globalThis` 已赋值），所以只有**第一次**调用报错、之后全好，极容易被误判成"偶发"。包一层 `Boolean(...)` 就行。
 8. **桥的 `call()` 拿到的是 `{ value, page }`，不是页面里的返回值本身。** `client-page.js` 里每个走 `eval` 的实现都要取 `answer.value`；漏了的话工具返回 `undefined` 字段，宿主会报 `value is not lossless JSON`（不是"没读到"）。
-9. **返回值克隆不了时（DOM 节点、Map）不要直接失败。** `evalInPage` 里按 `/could not be cloned/` 兜底：让页面自己 `JSON.stringify` 成字符串再取回。语句式代码（`a; b`）兜底会再失败，那时抛原始错误。
+9. **DOM 节点会被静默序列化成 `{}`，不抛错。** `executeJavaScript` 对函数、`Map` 这类会抛 `could not be cloned`（`evalInPage` 里按这个关键字兜底成 JSON 字符串），但对 Element 直接回 `{}`——所以 `sidebar_eval('document.body')` 拿到的是 `{}`，要节点信息就在页面里先取属性（`document.body.className`、`.children.length`）。
 
 ## 改完怎么验
 
